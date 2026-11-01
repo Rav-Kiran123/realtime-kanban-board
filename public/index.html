@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeamBoard - realtime kanban</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ================= LOGIN SCREEN ================= -->
+  <div id="login-view" class="login-view hidden">
+    <div class="login-card">
+      <h1>📋 TeamBoard</h1>
+      <p class="muted">Real-time kanban for organizations and their branches</p>
+
+      <form id="login-form" class="stack">
+        <input id="login-email" type="email" placeholder="Email" required autocomplete="username">
+        <input id="login-password" type="password" placeholder="Password" required autocomplete="current-password">
+        <button class="btn primary" type="submit">Log in</button>
+      </form>
+
+      <form id="register-form" class="stack hidden">
+        <input id="reg-name" placeholder="Your name" required>
+        <input id="reg-email" type="email" placeholder="Email" required>
+        <input id="reg-password" type="password" placeholder="Password (min 8 chars)" minlength="8" required>
+        <button class="btn primary" type="submit">Create account</button>
+      </form>
+      <p class="small"><a href="#" id="toggle-register">New here? Create an account</a></p>
+
+      <div class="demo-users">
+        <p class="small muted">Demo accounts - password <code>password123</code></p>
+        <div class="demo-grid">
+          <button class="demo" data-email="alice@acme.test"><b>Alice</b><span>Acme · Org Admin</span></button>
+          <button class="demo" data-email="bob@acme.test"><b>Bob</b><span>Hyderabad · Tenant Admin</span></button>
+          <button class="demo" data-email="carol@acme.test"><b>Carol</b><span>Hyd + Blr · Member</span></button>
+          <button class="demo" data-email="dan@acme.test"><b>Dan</b><span>Bangalore · Member</span></button>
+          <button class="demo" data-email="gina@globex.test"><b>Gina</b><span>Globex · Org Admin</span></button>
+          <button class="demo" data-email="omar@globex.test"><b>Omar</b><span>London · Member</span></button>
+        </div>
+        <p class="small muted">Tip: open two browsers (or a private window) as different users in the same branch to see live sync.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN APP ================= -->
+  <div id="app-view" class="app-view hidden">
+    <header class="topbar">
+      <div class="brand">📋 TeamBoard</div>
+
+      <div class="picker">
+        <label for="org-select">Organization</label>
+        <div class="picker-row">
+          <select id="org-select"></select>
+          <button id="new-org-btn" class="icon-btn" title="New organization">＋</button>
+        </div>
+      </div>
+      <div class="picker">
+        <label for="tenant-select">Branch</label>
+        <div class="picker-row">
+          <select id="tenant-select"></select>
+          <button id="new-tenant-btn" class="icon-btn admin-org" title="New branch (org admins)">＋</button>
+        </div>
+      </div>
+      <div class="picker">
+        <label for="board-select">Board</label>
+        <div class="picker-row">
+          <select id="board-select"></select>
+          <button id="new-board-btn" class="icon-btn admin-tenant" title="New board">＋</button>
+          <button id="board-menu-btn" class="icon-btn admin-tenant" title="Rename / delete board">⋯</button>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="toolbar">
+        <button id="undo-btn" class="icon-btn" title="Undo (Ctrl+Z)">↶</button>
+        <button id="redo-btn" class="icon-btn" title="Redo (Ctrl+Y)">↷</button>
+        <button id="members-btn" class="icon-btn" title="Branch members">👥</button>
+        <button id="activity-btn" class="icon-btn" title="Activity log">🕒</button>
+      </div>
+
+      <div id="presence" class="presence" title="Online in this branch"></div>
+      <span id="conn-status" class="conn-status" title="Live connection"></span>
+
+      <div class="me">
+        <span id="me-name"></span>
+        <span id="role-badge" class="role-badge"></span>
+        <button id="logout-btn" class="btn small-btn">Log out</button>
+      </div>
+    </header>
+
+    <div id="offline-banner" class="offline-banner hidden">
+      ⚠️ Connection lost - trying to reconnect… Changes may fail until we're back (the board re-syncs automatically).
+    </div>
+
+    <main class="main">
+      <section id="board" class="board"></section>
+
+      <!-- activity log side panel -->
+      <aside id="activity-panel" class="side-panel hidden">
+        <div class="panel-head">
+          <h3>Activity</h3>
+          <button id="activity-close" class="icon-btn">✕</button>
+        </div>
+        <ul id="activity-list" class="activity-list"></ul>
+      </aside>
+
+      <!-- task detail panel -->
+      <aside id="task-panel" class="side-panel task-panel hidden">
+        <div class="panel-head">
+          <span id="tp-column" class="muted small"></span>
+          <button id="tp-close" class="icon-btn" title="Close (Esc)">✕</button>
+        </div>
+        <div id="tp-notice" class="notice hidden"></div>
+        <div id="tp-viewers" class="viewers"></div>
+        <form id="task-form" class="stack">
+          <label>Title <input id="tp-title" maxlength="200" required></label>
+          <label>Description <textarea id="tp-desc" rows="6" placeholder="Add more details…"></textarea></label>
+          <div class="row">
+            <label>Priority
+              <select id="tp-priority">
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </label>
+            <label>Due date <input id="tp-due" type="date"></label>
+          </div>
+          <label>Assignee <select id="tp-assignee"></select></label>
+          <div class="panel-actions">
+            <button type="submit" class="btn primary">Save</button>
+            <button type="button" id="tp-delete" class="btn danger">Delete</button>
+          </div>
+          <p id="tp-meta" class="muted small"></p>
+        </form>
+        <h4>History</h4>
+        <ul id="tp-history" class="activity-list compact"></ul>
+      </aside>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+  <div id="toasts" class="toasts"></div>
+
+  <!-- socket.io serves its own client file -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
